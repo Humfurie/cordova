@@ -1,0 +1,364 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
+}
+
+// Categories for organizing places and blogs
+model Category {
+  id           Int        @id @default(autoincrement())
+  name         String     @db.VarChar(255)
+  slug         String     @unique @db.VarChar(255)
+  description  String?    @db.Text
+  icon         String?    @db.VarChar(255)
+  parentId     Int?       @map("parent_id")
+  displayOrder Int        @default(0) @map("display_order")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  parent       Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children     Category[] @relation("CategoryHierarchy")
+  places       Place[]
+  blogs        Blog[]
+
+  @@map("categories")
+}
+
+// Tags for flexible content classification
+model Tag {
+  id        Int        @id @default(autoincrement())
+  name      String     @unique @db.VarChar(100)
+  slug      String     @unique @db.VarChar(100)
+  createdAt DateTime   @default(now()) @map("created_at")
+
+  places    Place[]    @relation("PlaceTags")
+  blogs     Blog[]     @relation("BlogTags")
+
+  @@map("tags")
+}
+
+// Media/Images management
+model Media {
+  id               Int       @id @default(autoincrement())
+  filename         String    @db.VarChar(255)
+  originalFilename String    @map("original_filename") @db.VarChar(255)
+  mimeType         String    @map("mime_type") @db.VarChar(100)
+  size             Int
+  width            Int?
+  height           Int?
+  url              String    @db.Text
+  thumbnailUrl     String?   @map("thumbnail_url") @db.Text
+  mediumUrl        String?   @map("medium_url") @db.Text
+  largeUrl         String?   @map("large_url") @db.Text
+  altText          String?   @map("alt_text") @db.VarChar(255)
+  caption          String?   @db.Text
+  uploadedBy       Int?      @map("uploaded_by")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  placeFeaturedImages Place[]      @relation("PlaceFeaturedImage")
+  blogFeaturedImages  Blog[]       @relation("BlogFeaturedImage")
+  placeMedia          PlaceMedia[]
+
+  @@map("media")
+}
+
+// Places/Destinations - The core entity
+model Place {
+  id               Int       @id @default(autoincrement())
+  name             String    @db.VarChar(255)
+  slug             String    @unique @db.VarChar(255)
+  description      String?   @db.Text
+  shortDescription String?   @map("short_description") @db.Text
+
+  // Location data
+  address          String?   @db.Text
+  city             String?   @db.VarChar(100)
+  state            String?   @db.VarChar(100)
+  country          String?   @db.VarChar(100)
+  postalCode       String?   @map("postal_code") @db.VarChar(20)
+
+  // Coordinates (we'll use separate lat/lng for Prisma compatibility)
+  latitude         Float?    @db.DoublePrecision
+  longitude        Float?    @db.DoublePrecision
+
+  // Place details
+  categoryId       Int?      @map("category_id")
+  placeType        String?   @map("place_type") @db.VarChar(50) // attraction, restaurant, hotel, landmark
+
+  // Media
+  featuredImageId  Int?      @map("featured_image_id")
+
+  // Ratings and popularity
+  rating           Float     @default(0.0) @db.DoublePrecision
+  reviewCount      Int       @default(0) @map("review_count")
+  visitCount       Int       @default(0) @map("visit_count")
+
+  // Operational info (stored as JSON)
+  openingHours     Json?     @map("opening_hours")
+  contactInfo      Json?     @map("contact_info")
+  admissionFee     Json?     @map("admission_fee")
+
+  // SEO
+  metaTitle        String?   @map("meta_title") @db.VarChar(255)
+  metaDescription  String?   @map("meta_description") @db.Text
+  keywords         String[]
+
+  // Status
+  status           String    @default("draft") @db.VarChar(20) // draft, published, archived
+  isFeatured       Boolean   @default(false) @map("is_featured")
+
+  publishedAt      DateTime? @map("published_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  category         Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  featuredImage    Media?        @relation("PlaceFeaturedImage", fields: [featuredImageId], references: [id], onDelete: SetNull)
+  tags             Tag[]         @relation("PlaceTags")
+  media            PlaceMedia[]
+  reviews          Review[]
+  blogPlaces       BlogPlace[]
+  tourStops        TourStop[]
+
+  @@index([slug])
+  @@index([status])
+  @@index([categoryId])
+  @@index([isFeatured])
+  @@index([publishedAt])
+  @@index([latitude, longitude])
+  @@map("places")
+}
+
+// Place images (many-to-many relationship with ordering)
+model PlaceMedia {
+  id           Int      @id @default(autoincrement())
+  placeId      Int      @map("place_id")
+  mediaId      Int      @map("media_id")
+  displayOrder Int      @default(0) @map("display_order")
+  isFeatured   Boolean  @default(false) @map("is_featured")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  place        Place    @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  media        Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@unique([placeId, mediaId])
+  @@map("place_media")
+}
+
+// Blog/Articles
+model Blog {
+  id               Int       @id @default(autoincrement())
+  title            String    @db.VarChar(255)
+  slug             String    @unique @db.VarChar(255)
+  content          String    @db.Text
+  excerpt          String?   @db.Text
+
+  // Author info
+  authorId         Int?      @map("author_id")
+  authorName       String?   @map("author_name") @db.VarChar(255)
+
+  // Media
+  featuredImageId  Int?      @map("featured_image_id")
+
+  // Categorization
+  categoryId       Int?      @map("category_id")
+
+  // Engagement metrics
+  viewCount        Int       @default(0) @map("view_count")
+  readTime         Int?      @map("read_time") // in minutes
+
+  // SEO
+  metaTitle        String?   @map("meta_title") @db.VarChar(255)
+  metaDescription  String?   @map("meta_description") @db.Text
+  keywords         String[]
+
+  // Status
+  status           String    @default("draft") @db.VarChar(20)
+  isFeatured       Boolean   @default(false) @map("is_featured")
+
+  publishedAt      DateTime? @map("published_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  category         Category?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  featuredImage    Media?      @relation("BlogFeaturedImage", fields: [featuredImageId], references: [id], onDelete: SetNull)
+  tags             Tag[]       @relation("BlogTags")
+  blogPlaces       BlogPlace[]
+  comments         Comment[]
+
+  @@index([slug])
+  @@index([status])
+  @@index([publishedAt])
+  @@map("blogs")
+}
+
+// Blog-Place relationships (for travel guides)
+model BlogPlace {
+  id             Int      @id @default(autoincrement())
+  blogId         Int      @map("blog_id")
+  placeId        Int      @map("place_id")
+  mentionContext String?  @map("mention_context") @db.Text
+
+  blog           Blog     @relation(fields: [blogId], references: [id], onDelete: Cascade)
+  place          Place    @relation(fields: [placeId], references: [id], onDelete: Cascade)
+
+  @@unique([blogId, placeId])
+  @@map("blog_places")
+}
+
+// Reviews for places
+model Review {
+  id           Int      @id @default(autoincrement())
+  placeId      Int      @map("place_id")
+  authorName   String   @map("author_name") @db.VarChar(255)
+  authorEmail  String?  @map("author_email") @db.VarChar(255)
+  rating       Int      // 1-5
+  title        String?  @db.VarChar(255)
+  content      String?  @db.Text
+  helpfulCount Int      @default(0) @map("helpful_count")
+  status       String   @default("pending") @db.VarChar(20) // pending, approved, rejected
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  place        Place    @relation(fields: [placeId], references: [id], onDelete: Cascade)
+
+  @@map("reviews")
+}
+
+// Points of Interest (POI) near places
+model PointOfInterest {
+  id              Int      @id @default(autoincrement())
+  name            String   @db.VarChar(255)
+  description     String?  @db.Text
+  poiType         String   @map("poi_type") @db.VarChar(50) // restaurant, parking, restroom, viewpoint
+  latitude        Float    @db.DoublePrecision
+  longitude       Float    @db.DoublePrecision
+  relatedPlaceId  Int?     @map("related_place_id")
+  icon            String?  @db.VarChar(100)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([latitude, longitude])
+  @@map("points_of_interest")
+}
+
+// Tours/Itineraries
+model Tour {
+  id              Int       @id @default(autoincrement())
+  name            String    @db.VarChar(255)
+  slug            String    @unique @db.VarChar(255)
+  description     String?   @db.Text
+  durationDays    Int?      @map("duration_days")
+  difficultyLevel String?   @map("difficulty_level") @db.VarChar(50)
+  featuredImageId Int?      @map("featured_image_id")
+  priceRange      String?   @map("price_range") @db.VarChar(50)
+  status          String    @default("draft") @db.VarChar(20)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  stops           TourStop[]
+
+  @@map("tours")
+}
+
+// Tour stops (ordered places in a tour)
+model TourStop {
+  id              Int      @id @default(autoincrement())
+  tourId          Int      @map("tour_id")
+  placeId         Int      @map("place_id")
+  stopOrder       Int      @map("stop_order")
+  dayNumber       Int?     @map("day_number")
+  notes           String?  @db.Text
+  durationMinutes Int?     @map("duration_minutes")
+
+  tour            Tour     @relation(fields: [tourId], references: [id], onDelete: Cascade)
+  place           Place    @relation(fields: [placeId], references: [id], onDelete: Cascade)
+
+  @@unique([tourId, stopOrder])
+  @@map("tour_stops")
+}
+
+// Roles for RBAC
+model Role {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.VarChar(50) // admin, author, editor, user
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  users           User[]
+  rolePermissions RolePermission[]
+
+  @@map("roles")
+}
+
+// Permissions for RBAC
+model Permission {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.VarChar(100) // places.create, blogs.delete, etc
+  description String?  @db.Text
+  resource    String   @db.VarChar(50) // places, blogs, media, comments
+  action      String   @db.VarChar(50) // create, read, update, delete, approve
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+// Pivot table for roles and permissions
+model RolePermission {
+  roleId       Int @map("role_id")
+  permissionId Int @map("permission_id")
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// Users for authentication
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique @db.VarChar(255)
+  password  String   @db.VarChar(255)
+  name      String?  @db.VarChar(255)
+  roleId    Int?     @map("role_id")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  role     Role?     @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  comments Comment[]
+
+  @@index([roleId])
+  @@map("users")
+}
+
+// Comments for blogs
+model Comment {
+  id        Int      @id @default(autoincrement())
+  blogId    Int      @map("blog_id")
+  userId    Int?     @map("user_id")
+  authorName String?  @map("author_name") @db.VarChar(255)
+  authorEmail String? @map("author_email") @db.VarChar(255)
+  content   String   @db.Text
+  status    String   @default("pending") @db.VarChar(20) // pending, approved, rejected
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  blog      Blog     @relation(fields: [blogId], references: [id], onDelete: Cascade)
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([blogId])
+  @@index([status])
+  @@map("comments")
+}
