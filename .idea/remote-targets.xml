@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="RemoteTargetsManager">
+    <targets>
+      <target name="humphrey@100.90.84.57:22" type="ssh/sftp" uuid="4380537b-f2ad-4869-8400-f1a510874030">
+        <config>
+          <option name="projectRootOnTarget" value="$PROJECT_DIR$/../../../../humphrey/Desktop/minio" />
+          <option name="serverName" value="humphrey@100.90.84.57:22 password" />
+          <option name="useRsync" value="true" />
+        </config>
+      </target>
+    </targets>
+  </component>
+</project>

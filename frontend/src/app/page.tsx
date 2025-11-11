@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import {
   Container,
@@ -32,22 +32,21 @@ import {
 } from '@mui/material';
 import {
   Search as SearchIcon,
-  FilterList,
   Menu as MenuIcon,
   Explore,
-  Restaurant,
-  Hotel,
   Article,
   Map as MapIcon,
   ViewList,
+  Terrain,
 } from '@mui/icons-material';
+import Link from 'next/link';
 import { placesApi, categoriesApi } from '@/lib/api';
 import { Place, Category } from '@/types';
 import PlaceCard from '@/components/Places/PlaceCard';
 
-// Dynamically import the map to avoid SSR issues
-const InteractiveMap = dynamic(
-  () => import('@/components/Map/InteractiveMap'),
+// Dynamically import the FREE 3D map to avoid SSR issues
+const CordovaMap3DFree = dynamic(
+  () => import('@/components/Map/CordovaMap3DFree'),
   { ssr: false, loading: () => <CircularProgress /> }
 );
 
@@ -60,19 +59,13 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
-  const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [viewMode, setViewMode] = useState<'map' | 'list'>('map');
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
-  useEffect(() => {
-    fetchPlaces();
-    fetchCategories();
-  }, [selectedCategory, searchQuery]);
-
-  const fetchPlaces = async () => {
+  const fetchPlaces = useCallback(async () => {
     setLoading(true);
     try {
-      const params: any = {
+      const params: Record<string, string | number> = {
         page: 1,
         limit: 50,
         status: 'published',
@@ -93,7 +86,12 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedCategory, searchQuery]);
+
+  useEffect(() => {
+    fetchPlaces();
+    fetchCategories();
+  }, [fetchPlaces]);
 
   const fetchCategories = async () => {
     try {
@@ -145,6 +143,14 @@ export default function Home() {
               <Button color="inherit" startIcon={<Article />}>
                 Blogs
               </Button>
+              <Button
+                color="inherit"
+                startIcon={<Terrain />}
+                component={Link}
+                href="/map"
+              >
+                3D Map
+              </Button>
             </Box>
           )}
         </Toolbar>
@@ -167,6 +173,12 @@ export default function Home() {
             <ListItemButton>
               <Article sx={{ mr: 2 }} />
               <ListItemText primary="Blogs" />
+            </ListItemButton>
+          </ListItem>
+          <ListItem disablePadding>
+            <ListItemButton component={Link} href="/map">
+              <Terrain sx={{ mr: 2 }} />
+              <ListItemText primary="3D Map" />
             </ListItemButton>
           </ListItem>
         </List>
@@ -223,12 +235,14 @@ export default function Home() {
               placeholder="Search places, restaurants, hotels..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon />
-                  </InputAdornment>
-                ),
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon />
+                    </InputAdornment>
+                  ),
+                },
               }}
               sx={{ flex: 1 }}
             />
@@ -287,11 +301,11 @@ export default function Home() {
           <Box sx={{ display: 'flex', gap: 1 }}>
             <Button
               variant={viewMode === 'map' ? 'contained' : 'outlined'}
-              startIcon={<MapIcon />}
+              startIcon={<Terrain />}
               onClick={() => setViewMode('map')}
               size="small"
             >
-              Map
+              3D Map
             </Button>
             <Button
               variant={viewMode === 'list' ? 'contained' : 'outlined'}
@@ -304,14 +318,10 @@ export default function Home() {
           </Box>
         </Box>
 
-        {/* Interactive Map View */}
+        {/* 3D Map View - FREE & UNLIMITED */}
         {viewMode === 'map' && (
-          <Box sx={{ mb: 4 }}>
-            <InteractiveMap
-              selectedPlace={selectedPlace}
-              onPlaceSelect={setSelectedPlace}
-              height="600px"
-            />
+          <Box sx={{ mb: 4, borderRadius: 2, overflow: 'hidden', boxShadow: 3 }}>
+            <CordovaMap3DFree height="600px" />
           </Box>
         )}
 
@@ -360,7 +370,7 @@ export default function Home() {
             sx={{ position: 'fixed', bottom: 16, right: 16 }}
             onClick={() => setViewMode(viewMode === 'map' ? 'list' : 'map')}
           >
-            {viewMode === 'map' ? <ViewList /> : <MapIcon />}
+            {viewMode === 'map' ? <ViewList /> : <Terrain />}
           </Fab>
         </Zoom>
       )}
